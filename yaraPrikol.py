@@ -3,8 +3,73 @@
 #     - Output: Define a basic YARA rule template with placeholders for patterns, metadata, and conditions.
 
 
+import requests
+import os
 
+# Function to fetch data from a URL or local file path
+def fetch_data(input_value):
+    if input_value.startswith("http" or "https"):  # Input is a URL
+        response = requests.get(input_value)
+        if response.status_code == 200:
+            return response.text.splitlines()
+        else:
+            raise Exception(f"Failed to fetch data from URL: {input_value}")
+    elif os.path.exists(input_value):  # Input is a file path
+        with open(input_value, 'r') as file:
+            return file.readlines()
+    else:
+        raise ValueError("Input must be a valid URL or existing file path")
 
+# Function to extract hashes (MD5/SHA256) from data
+def extract_hashes(data):
+    hashes = []
+    for line in data:
+        if len(line.strip()) == 32 or len(line.strip()) == 64:  # MD5 or SHA256
+            hashes.append(line.strip())
+    return hashes
+
+# Function to generate a YARA rule
+def generate_yara_rule(rule_name, keywords, hashes):
+    rule = f"""
+rule {rule_name} {{
+    meta:
+        description = "Automatically generated YARA rule for phishing"
+    strings:
+        {''.join([f'$kw{i} = "{keyword}"\n' for i, keyword in enumerate(keywords)])}
+    condition:
+        any of them or any of {{ {', '.join([f'"{h}"' for h in hashes])} }}
+}}
+"""
+    return rule
+
+# User input for phishing data source
+input_source = input("Enter a phishing feed URL or file path: ")
+data = fetch_data(input_source)
+
+# Extract relevant phishing keywords from the data
+# Example of simplistic keyword extraction from URL paths
+phishing_keywords = [line.split('/')[-1].split('.')[0] for line in data if line.startswith("http")]
+print(f"Extracted keywords: {phishing_keywords[:5]}")  # Print first 5 keywords for verification
+
+# Extract hashes (if any) from the data
+hash_list = extract_hashes(data)
+print(f"Extracted hashes: {hash_list[:5]}")  # Print first 5 hashes for verification
+
+# Generate YARA rule
+rule_name = input("Enter a name for your YARA rule: ")
+yara_rule = generate_yara_rule(rule_name, phishing_keywords, hash_list)
+
+# Display the generated YARA rule
+print("\nGenerated YARA Rule:\n")
+print(yara_rule)
+
+# Optionally save the YARA rule to a file
+save_option = input("Do you want to save this rule to a file? (yes/no): ").strip().lower()
+if save_option == "yes":
+    output_file = f"{rule_name}.yar"
+    with open(output_file, 'w') as file:
+        file.write(yara_rule)
+    print(f"YARA rule saved to {output_file}")
 
 # 2. Collect Data for Signature Generation
 #     - Task: Decide on the types of data you’ll analyze (malware files, network signatures, behavioral patterns).
